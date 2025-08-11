@@ -1,0 +1,91 @@
+#CollagenVI
+import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
+
+#StreamlitSidebarUserControls
+st.sidebar.title("Simulation Parameters")
+transcription_rate = st.sidebar.slider(
+    "Transcription Rate (mRNA synthesis)", 0.1, 20.0, 5.0, 0.1
+)
+degradation_rate = st.sidebar.slider(
+    "Degradation Rate (mRNA decay)", 0.01, 1.0, 0.1, 0.01
+)
+regeneration_rate = st.sidebar.slider(
+    "Regeneration Rate", 0.01, 1.0, 0.05, 0.01
+)
+simulation_time = st.sidebar.slider(
+    "Simulation Time (hours)", 10, 100, 50, 1
+)
+time_steps = st.sidebar.slider(
+    "Number of Time Steps", 100, 1000, 500, 10
+)
+
+#MainUI
+st.title("Gene Expression, Muscle Health, and Regeneration Simulator")
+st.markdown("""
+This interactive simulation models gene expression (mRNA concentration), muscle tissue health, and muscle regeneration over time.
+- Adjust parameters in the sidebar to explore how transcription, degradation, and regeneration rates affect muscle health.
+""")
+
+def simulate_gene_expression(transcription_rate, degradation_rate, simulation_time, time_steps):
+    """
+    Simulates mRNA concentration over time using Euler's method.
+    d(mRNA)/dt = transcription_rate - degradation_rate * mRNA
+    """
+    dt = simulation_time / time_steps
+    mRNA = np.zeros(time_steps)
+    for t in range(1, time_steps):
+        mRNA[t] = mRNA[t-1] + dt * (transcription_rate - degradation_rate * mRNA[t-1])
+    time = np.linspace(0, simulation_time, time_steps)
+    return time, mRNA
+
+def simulate_muscle_health(mRNA, regeneration_rate, time_steps):
+    """
+    Simulates muscle health. Health decreases if mRNA (collagen) is low, increases via regeneration.
+    Muscle health capped between 0 and 1.
+    """
+    muscle_health = np.ones(time_steps)
+    regen_effect = np.zeros(time_steps)
+    required_collagen = np.mean(mRNA) * 0.5  # arbitrary requirement for healthy tissue
+
+    for t in range(1, time_steps):
+        #HealthdropsifmRNAisbelowrequirement
+        if mRNA[t] < required_collagen:
+            drop = (required_collagen - mRNA[t]) / required_collagen * 0.02
+            muscle_health[t] = max(muscle_health[t-1] - drop, 0)
+        else:
+            #Regenerateifhealthbelow 1
+            if muscle_health[t-1] < 1:
+                regen = regeneration_rate * (1 - muscle_health[t-1])
+                muscle_health[t] = min(muscle_health[t-1] + regen, 1)
+                regen_effect[t] = regen
+            else:
+                muscle_health[t] = muscle_health[t-1]
+    return muscle_health, regen_effect
+
+#Runsimulations
+time, mRNA = simulate_gene_expression(
+    transcription_rate, degradation_rate, simulation_time, time_steps
+)
+muscle_health, regen_effect = simulate_muscle_health(
+    mRNA, regeneration_rate, time_steps
+)
+
+#Visualization
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(time, mRNA, label="mRNA Concentration", color='blue')
+ax.plot(time, muscle_health, label="Muscle Health", color='green')
+ax.plot(time, regen_effect, label="Regeneration Effect", color='orange')
+ax.set_xlabel("Time (hours)")
+ax.set_ylabel("Value")
+ax.legend()
+ax.set_title("Gene Expression & Muscle Health Simulation")
+st.pyplot(fig)
+
+#Showsummarystatistics
+st.subheader("Simulation Summary")
+st.write(f"Final mRNA concentration: {mRNA[-1]:.2f}")
+st.write(f"Final muscle health: {muscle_health[-1]:.2f}")
+st.write(f"Total regeneration applied: {np.sum(regen_effect):.2f}")
+
