@@ -1,33 +1,246 @@
 {
-  "name": "Python 3",
-  // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bullseye",
-  "customizations": {
-    "codespaces": {
-      "openFiles": [
-        "README.md",
-        "code"
-      ]
-    },
-    "vscode": {
-      "settings": {},
-      "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance"
-      ]
+ import streamlit as st
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+
+st.set_page_config(
+    page_title="Collagen 6A3 Myopathy Simulator",
+    page_icon="🧬",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+    <style>
+    .main {background: linear-gradient(135deg, #0d102b 55%, #181b25 100%);}
+    .css-1v0mbdj {background: #141627;}
+    h1, h2, h3, h4, h5, h6 {color: #a3c2fd !important;}
+    .stTabs [data-baseweb="tab"] {background: #192041 !important; color: #ffe066 !important;}
+    .stTabs [aria-selected="true"] {background: #21264b !important; color: #ff5050 !important;}
+    .stProgress > div > div {background-image: linear-gradient(90deg,#1e2a74,#a3c2fd);}
+    .stButton>button {background-color: #21264b; color: #ffe066;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <h1 style='text-align: center; color:#a3c2fd;'>🧬 Collagen 6A3 Congenital Myopathy Simulator</h1>
+    <h3 style='text-align: center; color:#ffa500;'>Modeling Gene Expression, Muscle Weakness, and Regeneration</h3>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown("---", unsafe_allow_html=True)
+
+with st.expander("ℹ️ What does this app do?"):
+    st.markdown(
+        """
+        This interactive simulation models gene expression and muscle tissue health in the context of collagen 6A3-related congenital myopathy.
+        - **Gene Expression:** Represents how much mRNA (messenger RNA) for Collagen 6A3 is present, which influences collagen protein production.
+        - **Muscle Health:** Shows the overall health of muscle tissue, ranging from 0 (fully weak) to 1 (fully healthy).
+        - **Regeneration:** Simulates the ability of muscle to recover after damage, activated when health drops below maximum.
+
+        Adjust parameters below to explore how gene expression and regeneration rates affect muscle health over time!
+        """
+    )
+
+with st.sidebar:
+    st.markdown(
+        "<h2 style='color:#a3c2fd;'>🛠️ Simulation Controls</h2>",
+        unsafe_allow_html=True
+    )
+
+    transcription_rate = st.slider(
+        "Transcription Rate (mRNA production)", 0.0, 5.0, 1.2, 0.05
+    )
+    degradation_rate = st.slider(
+        "Degradation Rate (mRNA loss)", 0.0, 2.0, 0.8, 0.05
+    )
+    regeneration_rate = st.slider(
+        "Regeneration Rate (muscle recovery speed)", 0.0, 1.0, 0.3, 0.01
+    )
+    simulation_time = st.number_input(
+        "Simulation Time (hours)", min_value=1, max_value=120, value=48, step=1
+    )
+    time_steps = st.number_input(
+        "Number of Time Steps", min_value=10, max_value=1000, value=250, step=1
+    )
+
+    st.markdown("---", unsafe_allow_html=True)
+    st.markdown(
+        "<h4 style='color:#ffa500;'>💡 How to use:</h4>"
+        "<ul>"
+        "<li>Adjust the parameters above and click 'Run Simulation'.</li>"
+        "<li>View results, explanations, and download data below.</li>"
+        "</ul>", unsafe_allow_html=True
+    )
+    st.markdown("---", unsafe_allow_html=True)
+    st.markdown(
+        "<h4 style='color:#ff5050;'>🚀 How to Run Locally:</h4>"
+        "<pre>streamlit run app.py</pre>"
+        "<h4 style='color:#a3c2fd;'>🌐 How to Deploy:</h4>"
+        "Upload this file to Streamlit Cloud or your own server.",
+        unsafe_allow_html=True
+    )
+
+def simulate_gene_expression(transcription_rate, degradation_rate, simulation_time, time_steps):
+    dt = simulation_time / time_steps
+    mRNA = np.zeros(time_steps)
+    t = np.linspace(0, simulation_time, time_steps)
+    mRNA[0] = 1.0
+    for i in range(1, time_steps):
+        dmRNA = transcription_rate - degradation_rate * mRNA[i-1]
+        mRNA[i] = mRNA[i-1] + dmRNA * dt
+        mRNA[i] = max(mRNA[i], 0)
+    return mRNA, t
+
+def simulate_muscle_health(mRNA, regeneration_rate, time_steps):
+    health = np.ones(time_steps)
+    regen = np.zeros(time_steps)
+    for i in range(1, time_steps):
+        if mRNA[i] < 1.0:
+            health[i] = max(health[i-1] - (1.0 - mRNA[i]) * 0.03, 0.0)
+        else:
+            health[i] = min(health[i-1], 1.0)
+        if health[i] < 1.0:
+            regen[i] = regeneration_rate * (1.0 - health[i])
+            health[i] = min(health[i] + regen[i], 1.0)
+    return health, regen
+
+def get_summary_stats(health, t):
+    min_health = np.min(health)
+    max_health = np.max(health)
+    try:
+        full_regen_time = t[np.where(health >= 0.995)[0][0]]
+    except IndexError:
+        full_regen_time = None
+    return {
+        "min_health": min_health,
+        "max_health": max_health,
+        "full_regen_time": full_regen_time
     }
-  },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
-  "postAttachCommand": {
-    "server": "streamlit run code --server.enableCORS false --server.enableXsrfProtection false"
-  },
-  "portsAttributes": {
-    "8501": {
-      "label": "Application",
-      "onAutoForward": "openPreview"
-    }
-  },
-  "forwardPorts": [
-    8501
-  ]
+
+run_sim = st.button("Run Simulation", type="primary")
+
+if run_sim:
+    with st.spinner("Simulating gene expression and muscle health..."):
+        mRNA, t = simulate_gene_expression(transcription_rate, degradation_rate, simulation_time, time_steps)
+        health, regen = simulate_muscle_health(mRNA, regeneration_rate, time_steps)
+        stats = get_summary_stats(health, t)
+        df = pd.DataFrame({
+            "Time (hr)": t,
+            "mRNA": mRNA,
+            "Muscle Health": health,
+            "Regeneration Effect": regen
+        })
+
+    tab1, tab2, tab3 = st.tabs(["📊 Simulation Results", "🔬 Science Concepts", "📝 User Guide"])
+    with tab1:
+        st.markdown(
+            "<h4 style='color:#a3c2fd;'>📈 mRNA Concentration Over Time</h4>",
+            unsafe_allow_html=True
+        )
+        fig_mRNA = go.Figure()
+        fig_mRNA.add_trace(go.Scatter(x=t, y=mRNA, mode="lines", line=dict(color="#a3c2fd", width=4)))
+        fig_mRNA.update_layout(
+            template="plotly_dark",
+            plot_bgcolor="#181b25",
+            paper_bgcolor="#181b25",
+            font_color="#ffe066",
+            xaxis_title="Time (hours)",
+            yaxis_title="mRNA Concentration",
+            margin=dict(l=10, r=10, t=40, b=40)
+        )
+        st.plotly_chart(fig_mRNA, use_container_width=True)
+
+        st.markdown(
+            "<h4 style='color:#ffa500;'>💪 Muscle Health Over Time</h4>",
+            unsafe_allow_html=True
+        )
+        fig_health = go.Figure()
+        fig_health.add_trace(go.Scatter(x=t, y=health, mode="lines", line=dict(color="#ff5050", width=4)))
+        fig_health.update_layout(
+            template="plotly_dark",
+            plot_bgcolor="#181b25",
+            paper_bgcolor="#181b25",
+            font_color="#a3c2fd",
+            xaxis_title="Time (hours)",
+            yaxis_title="Muscle Health (0-1)",
+            margin=dict(l=10, r=10, t=40, b=40)
+        )
+        st.plotly_chart(fig_health, use_container_width=True)
+
+        st.markdown(
+            "<h4 style='color:#a3c2fd;'>🦾 Regeneration Effect Over Time</h4>",
+            unsafe_allow_html=True
+        )
+        fig_regen = go.Figure()
+        fig_regen.add_trace(go.Scatter(x=t, y=regen, mode="lines", line=dict(color="#ffd700", width=2, dash='dot')))
+        fig_regen.update_layout(
+            template="plotly_dark",
+            plot_bgcolor="#181b25",
+            paper_bgcolor="#181b25",
+            font_color="#ffd700",
+            xaxis_title="Time (hours)",
+            yaxis_title="Regeneration Effect",
+            margin=dict(l=10, r=10, t=40, b=40)
+        )
+        st.plotly_chart(fig_regen, use_container_width=True)
+
+        st.markdown("---", unsafe_allow_html=True)
+        st.subheader("🔑 Key Summary Statistics")
+        st.markdown(f"""
+        - **Minimum Muscle Health:** {stats['min_health']:.3f}<br>
+        - **Maximum Muscle Health:** {stats['max_health']:.3f}<br>
+        - **Time to Full Regeneration:** {"{:.1f} hr".format(stats['full_regen_time']) if stats['full_regen_time'] else "Never reaches full health"}
+        """, unsafe_allow_html=True)
+
+        st.markdown("---", unsafe_allow_html=True)
+        csv_data = df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Simulation Data (CSV)",
+            data=csv_data,
+            file_name="myopathy_simulation.csv",
+            mime="text/csv"
+        )
+
+    with tab2:
+        st.markdown(
+            """
+            ### 🔬 Scientific Concepts
+
+            - **Gene Expression:** Genes encode proteins like collagen 6A3. Higher transcription rates mean more mRNA is produced, which leads to more collagen protein in muscle.
+            - **Muscle Health:** Muscle tissue needs collagen to maintain structure and strength. Low mRNA/collagen causes weakness; the model simulates this drop.
+            - **Regeneration:** Muscles can heal over time. The regeneration rate models how quickly muscle health recovers after weakness or damage.
+
+            **Why model these processes?**  
+            Understanding how gene expression and regeneration interact helps researchers design therapies for congenital myopathies. Adjusting rates can simulate effects of drugs or gene therapies.
+
+            **Euler's Method:**  
+            A simple numerical approach for solving differential equations, used here to estimate mRNA levels over time.
+            """, unsafe_allow_html=True
+        )
+
+    with tab3:
+        st.markdown(
+            """
+
+            1. **Set your parameters** in the left sidebar.
+            2. **Click 'Run Simulation'** to visualize how mRNA, muscle health, and regeneration change.
+            3. **Interpret results:**  
+                - Low mRNA means weaker muscle health.
+                - Regeneration effect shows healing rate.
+                - Use summary stats to compare scenarios.
+            4. **Download CSV** to analyze results outside Streamlit.
+
+            **Tip:** Try extreme values (very low or high transcription/regeneration rates) to see how the disease severity or recovery changes!
+            """, unsafe_allow_html=True
+        )
+
+else:
+    st.info("⬅️ Adjust simulation parameters in the sidebar, then click **Run Simulation** to begin!", icon="🧬")
 }
